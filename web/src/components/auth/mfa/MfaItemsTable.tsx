@@ -1,7 +1,14 @@
 import i18next from "i18next";
 import {SelectField} from "@/components/common/SelectField";
 import {EditableTable} from "@/components/crud/EditableTable";
-import {EmailMfaType, PushMfaType, RadiusMfaType, SmsMfaType, TotpMfaType} from "@/components/auth/mfa/constants";
+import {
+  EmailMfaType,
+  PushMfaType,
+  RadiusMfaType,
+  SmsMfaType,
+  TotpMfaType,
+  WebAuthnMfaType,
+} from "@/components/auth/mfa/constants";
 import * as Setting from "@/lib/setting";
 
 /** The stored name is the backend's MFA type, not the label shown in the dropdown. */
@@ -11,6 +18,7 @@ const MFA_ITEMS = [
   {id: TotpMfaType, name: "App"},
   {id: RadiusMfaType, name: "RADIUS"},
   {id: PushMfaType, name: "Push"},
+  {id: WebAuthnMfaType, name: "WebAuthn"},
 ];
 
 /** `general:Optional` and friends do not exist; the antd table uses these. */

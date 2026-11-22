@@ -14,8 +14,9 @@
 
 import * as Setting from "@/lib/setting";
 
-export function registerWebauthnCredential() {
-  return fetch(`${Setting.ServerUrl}/api/webauthn/signup/begin`, {
+export function registerWebauthnCredential(isMfa = false) {
+  const mfaQuery = isMfa ? "?mfa=true" : "";
+  return fetch(`${Setting.ServerUrl}/api/webauthn/signup/begin${mfaQuery}`, {
     method: "GET",
     credentials: "include",
     headers: {
@@ -40,7 +41,7 @@ export function registerWebauthnCredential() {
       const attestationObject = (credential as any).response.attestationObject;
       const clientDataJSON = (credential as any).response.clientDataJSON;
       const rawId = (credential as any).rawId;
-      return fetch(`${Setting.ServerUrl}/api/webauthn/signup/finish`, {
+      return fetch(`${Setting.ServerUrl}/api/webauthn/signup/finish${mfaQuery}`, {
         method: "POST",
         credentials: "include",
         body: JSON.stringify({

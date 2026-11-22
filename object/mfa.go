@@ -39,11 +39,12 @@ type MfaInterface interface {
 }
 
 const (
-	EmailType  = "email"
-	SmsType    = "sms"
-	TotpType   = "app"
-	RadiusType = "radius"
-	PushType   = "push"
+	EmailType    = "email"
+	SmsType      = "sms"
+	TotpType     = "app"
+	RadiusType   = "radius"
+	PushType     = "push"
+	WebAuthnType = "webauthn"
 )
 
 const (
@@ -64,6 +65,8 @@ func GetMfaUtil(mfaType string, config *MfaProps) MfaInterface {
 		return NewRadiusMfaUtil(config)
 	case PushType:
 		return NewPushMfaUtil(config)
+	case WebAuthnType:
+		return NewWebauthnMfaUtil(config)
 	}
 
 	return nil
@@ -120,7 +123,7 @@ func MfaRecover(user *User, recoveryCode string) error {
 func GetAllMfaProps(user *User, masked bool) []*MfaProps {
 	mfaProps := []*MfaProps{}
 
-	for _, mfaType := range []string{SmsType, EmailType, TotpType, RadiusType, PushType} {
+	for _, mfaType := range []string{SmsType, EmailType, TotpType, RadiusType, PushType, WebAuthnType} {
 		mfaProps = append(mfaProps, user.GetMfaProps(mfaType, masked))
 	}
 	return mfaProps
@@ -217,6 +220,18 @@ func (user *User) GetMfaProps(mfaType string, masked bool) *MfaProps {
 			mfaProps.Secret = user.MfaPushReceiver
 		}
 		mfaProps.URL = user.MfaPushProvider
+	} else if mfaType == WebAuthnType {
+		if !user.IsWebAuthnMfaEnabled() {
+			return &MfaProps{
+				Enabled: false,
+				MfaType: mfaType,
+			}
+		}
+
+		mfaProps = &MfaProps{
+			Enabled: true,
+			MfaType: mfaType,
+		}
 	}
 
 	if user.PreferredMfaType == mfaType {

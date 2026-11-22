@@ -1796,7 +1796,11 @@ func (user *User) IsMfaEnabled() bool {
 	if user == nil {
 		return false
 	}
-	return user.PreferredMfaType != ""
+	return user.PreferredMfaType != "" || user.IsWebAuthnMfaEnabled()
+}
+
+func (user *User) IsWebAuthnMfaEnabled() bool {
+	return user != nil && len(user.WebauthnCredentials) > 0
 }
 
 func (user *User) GetPreferredMfaProps(masked bool) *MfaProps {

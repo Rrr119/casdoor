@@ -9,12 +9,14 @@ import {CodeInput} from "@/components/auth/CodeInput";
 import {PushWait} from "@/ee/components/auth/mfa/PushWait";
 import * as AuthBackend from "@/backend/AuthBackend";
 import * as Setting from "@/lib/setting";
+import {signInWithWebAuthn} from "@/auth/webauthn";
 import {
   EmailMfaType,
   PushMfaType,
   RadiusMfaType,
   SmsMfaType,
   TotpMfaType,
+  WebAuthnMfaType,
 } from "@/components/auth/mfa/constants";
 
 export {
@@ -25,6 +27,7 @@ export {
   TotpMfaType,
   RadiusMfaType,
   PushMfaType,
+  WebAuthnMfaType,
   RecoveryMfaType,
 } from "@/components/auth/mfa/constants";
 
@@ -44,6 +47,8 @@ function getSwitchLabel(mfaType: string) {
     return i18next.t("mfa:Use Email");
   case PushMfaType:
     return i18next.t("mfa:Use phone confirmation");
+  case WebAuthnMfaType:
+    return i18next.t("login:WebAuthn");
   default:
     return "";
   }
@@ -128,6 +133,26 @@ export function MfaVerify({formValues, authParams, mfaProps, application, onSucc
     }
   };
 
+  const verifyWebAuthn = () => {
+    setLoading(true);
+    signInWithWebAuthn(
+      application,
+      formValues.username ?? "",
+      {...formValues, type: formValues.type ?? "login"},
+      authParams,
+      {mfa: true, enableMfaRemember: remember},
+    )
+      .then((res: any) => {
+        if (res?.status === "ok") {
+          onSuccess(res);
+        } else {
+          Setting.showMessage("error", res?.msg);
+        }
+      })
+      .catch((err: any) => Setting.showMessage("error", err.message))
+      .finally(() => setLoading(false));
+  };
+
   // The antd MfaAuthVerifyForm branches on the factor: SMS/email get a "Get Code"
   // field, TOTP an authenticator code, push the code from the notification, and
   // RADIUS the account's RADIUS password.
@@ -183,6 +208,13 @@ export function MfaVerify({formValues, authParams, mfaProps, application, onSucc
           <p className="text-sm text-muted-foreground">{prompt}</p>
           <CodeInput autoFocus value={passcode} onChange={setPasscode} onComplete={verifyComplete} />
         </>
+      ) : selected?.mfaType === WebAuthnMfaType ? (
+        <>
+          <p className="text-sm text-muted-foreground">{i18next.t("mfa:Multi-factor authentication")}</p>
+          <Button className="w-full" loading={loading} onClick={verifyWebAuthn}>
+            {i18next.t("login:WebAuthn")}
+          </Button>
+        </>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">{prompt}</p>
@@ -209,7 +241,7 @@ export function MfaVerify({formValues, authParams, mfaProps, application, onSucc
         </Label>
       </div>
 
-      {selected?.mfaType !== PushMfaType ? (
+      {selected?.mfaType !== PushMfaType && selected?.mfaType !== WebAuthnMfaType ? (
         <Button className="w-full" loading={loading} onClick={() => post({passcode, enableMfaRemember: remember})}>
           {i18next.t("mfa:Verify Code")}
         </Button>

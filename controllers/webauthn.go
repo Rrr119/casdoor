@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/casdoor/casdoor/form"
 	"github.com/casdoor/casdoor/object"
@@ -27,10 +28,28 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
+func (c *ApiController) checkWebAuthnMfaAllowed(user *object.User) bool {
+	organization, err := object.GetOrganizationByUser(user)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return false
+	}
+	if organization == nil {
+		c.ResponseError(c.T("check:Organization does not exist"))
+		return false
+	}
+	if !object.IsMfaTypeAllowed(organization, user, object.WebAuthnType) {
+		c.ResponseError(fmt.Sprintf("the MFA type: %s is not allowed by the MFA items", object.WebAuthnType))
+		return false
+	}
+	return true
+}
+
 // WebAuthnSignupBegin
 // @Title WebAuthnSignupBegin
 // @Tag User API
 // @Description WebAuthn Registration Flow 1st stage
+// @Param   mfa     query   string  false       "set to true when registering a WebAuthn MFA factor"
 // @Success 200 {object} protocol.CredentialCreation The CredentialCreationOptions object
 // @router /webauthn/signup/begin [get]
 func (c *ApiController) WebAuthnSignupBegin() {
@@ -44,6 +63,12 @@ func (c *ApiController) WebAuthnSignupBegin() {
 	if user == nil {
 		c.ResponseError(c.T("general:Please login first"))
 		return
+	}
+
+	if c.Ctx.Input.Query("mfa") == "true" {
+		if !c.checkWebAuthnMfaAllowed(user) {
+			return
+		}
 	}
 
 	registerOptions := func(credCreationOpts *protocol.PublicKeyCredentialCreationOptions) {
@@ -74,6 +99,7 @@ func (c *ApiController) WebAuthnSignupBegin() {
 // @Tag User API
 // @Description WebAuthn Registration Flow 2nd stage
 // @Param   body    body   protocol.CredentialCreationResponse  true        "authenticator attestation Response"
+// @Param   mfa     query   string  false       "set to true when registering a WebAuthn MFA factor"
 // @Success 200 {object} controllers.Response "The Response object"
 // @router /webauthn/signup/finish [post]
 func (c *ApiController) WebAuthnSignupFinish() {
@@ -86,6 +112,9 @@ func (c *ApiController) WebAuthnSignupFinish() {
 	user := c.GetCurrentUser()
 	if user == nil {
 		c.ResponseError(c.T("general:Please login first"))
+		return
+	}
+	if c.Ctx.Input.Query("mfa") == "true" && !c.checkWebAuthnMfaAllowed(user) {
 		return
 	}
 	sessionObj := c.GetSession("registration")
@@ -109,6 +138,17 @@ func (c *ApiController) WebAuthnSignupFinish() {
 		return
 	}
 
+	if c.Ctx.Input.Query("mfa") == "true" {
+		if user.PreferredMfaType == "" {
+			user.PreferredMfaType = object.WebAuthnType
+		}
+		_, err = object.UpdateUser(user.GetId(), user, []string{"preferred_mfa_type"}, false)
+		if err != nil {
+			c.ResponseError(err.Error())
+			return
+		}
+	}
+
 	c.ResponseOk()
 }
 
@@ -118,6 +158,7 @@ func (c *ApiController) WebAuthnSignupFinish() {
 // @Description WebAuthn Login Flow 1st stage
 // @Param   owner     query    string  true        "owner"
 // @Param   name     query    string  true        "name"
+// @Param   mfa     query    string  false       "set to true for the second-factor WebAuthn challenge"
 // @Success 200 {object} protocol.CredentialAssertion The CredentialAssertion object
 // @router /webauthn/signin/begin [get]
 func (c *ApiController) WebAuthnSigninBegin() {
@@ -129,11 +170,27 @@ func (c *ApiController) WebAuthnSigninBegin() {
 
 	userOwner := c.Ctx.Input.Query("owner")
 	userName := c.Ctx.Input.Query("name")
+	mfaUserId := c.GetMfaUserSession()
 
 	var options *protocol.CredentialAssertion
 	var sessionData *webauthn.SessionData
 
-	if userName == "" {
+	if mfaUserId != "" {
+		var user *object.User
+		user, err = object.GetUser(mfaUserId)
+		if err != nil {
+			c.ResponseError(err.Error())
+			return
+		}
+		if user == nil || !user.IsWebAuthnMfaEnabled() {
+			c.ResponseError("WebAuthn MFA is not enabled for this user")
+			return
+		}
+		if !c.checkWebAuthnMfaAllowed(user) {
+			return
+		}
+		options, sessionData, err = webauthnObj.BeginLogin(user)
+	} else if userName == "" {
 		options, sessionData, err = webauthnObj.BeginDiscoverableLogin()
 	} else {
 		var user *object.User
@@ -169,11 +226,14 @@ func (c *ApiController) WebAuthnSigninBegin() {
 // @Tag Login API
 // @Description WebAuthn Login Flow 2nd stage
 // @Param   body    body   protocol.CredentialAssertionResponse  true        "authenticator assertion Response"
+// @Param   mfa     query    string  false       "set to true for the second-factor WebAuthn challenge"
+// @Param   enableMfaRemember     query    string  false       "set to true to remember this WebAuthn MFA verification"
 // @Success 200 {object} controllers.Response "The Response object"
 // @router /webauthn/signin/finish [post]
 func (c *ApiController) WebAuthnSigninFinish() {
 	responseType := c.Ctx.Input.Query("responseType")
 	clientId := c.Ctx.Input.Query("clientId")
+	mfaUserId := c.GetMfaUserSession()
 	webauthnObj, err := object.GetWebAuthnObject(c.Ctx.Request.Host)
 	if err != nil {
 		c.ResponseError(err.Error())
@@ -217,6 +277,20 @@ func (c *ApiController) WebAuthnSigninFinish() {
 		return
 	}
 
+	if mfaUserId != "" {
+		if user == nil || user.GetId() != mfaUserId {
+			c.ResponseError("the WebAuthn credential does not belong to the sign-in waiting for MFA")
+			return
+		}
+		if !user.IsWebAuthnMfaEnabled() {
+			c.ResponseError("WebAuthn MFA is not enabled for this user")
+			return
+		}
+		if !c.checkWebAuthnMfaAllowed(user) {
+			return
+		}
+	}
+
 	application, err := getWebAuthnSigninApplication(clientId, responseType, c.Ctx.Input.Query("application"), user)
 	if err != nil {
 		c.ResponseError(err.Error())
@@ -226,12 +300,12 @@ func (c *ApiController) WebAuthnSigninFinish() {
 		c.ResponseError(c.T("check:Application does not exist"))
 		return
 	}
-	if !application.IsWebAuthnEnabled() {
+	if mfaUserId == "" && !application.IsWebAuthnEnabled() {
 		c.ResponseError(c.T("auth:The login method: login with WebAuthn is not enabled for the application"))
 		return
 	}
 
-	if !credential.Flags.UserVerified && c.checkWebAuthnSigninMfa(user) {
+	if mfaUserId == "" && !credential.Flags.UserVerified && c.checkWebAuthnSigninMfa(user) {
 		return
 	}
 
@@ -245,6 +319,30 @@ func (c *ApiController) WebAuthnSigninFinish() {
 		return
 	}
 	if resp.Status == "ok" {
+		if mfaUserId != "" && c.Ctx.Input.Query("enableMfaRemember") == "true" {
+			organization, err := object.GetOrganizationByUser(user)
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+			mfaRememberInSeconds := organization.MfaRememberInHours * 3600
+			currentTime := util.String2Time(util.GetCurrentTime())
+			user.MfaRememberDeadline = util.Time2String(currentTime.Add(time.Duration(mfaRememberInSeconds) * time.Second))
+			_, err = object.UpdateUser(user.GetId(), user, []string{"mfa_remember_deadline"}, user.IsAdmin)
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+			err = c.setMfaRememberCookie(user, mfaRememberInSeconds)
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+		}
+		if mfaUserId != "" {
+			c.setMfaUserSession("")
+			c.SetSession("verificationCodeType", "")
+		}
 		c.SetSessionUsername(user.GetId())
 		util.LogInfo(c.Ctx, "API: [%s] signed in", user.GetId())
 	}

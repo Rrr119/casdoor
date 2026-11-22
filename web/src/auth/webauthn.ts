@@ -11,11 +11,15 @@ export function signInWithWebAuthn(
   username: string,
   values: any,
   oAuthParams: any,
+  options: {mfa?: boolean; enableMfaRemember?: boolean} = {},
 ): Promise<{status: string; msg?: string; data?: any} | null> {
   const usernameParam = `&name=${encodeURIComponent(username)}`;
+  const mfaQuery = options.mfa
+    ? `&mfa=true${options.enableMfaRemember ? "&enableMfaRemember=true" : ""}`
+    : "";
 
   return fetch(
-    `${Setting.ServerUrl}/api/webauthn/signin/begin?owner=${application.organization}${username ? usernameParam : ""}`,
+    `${Setting.ServerUrl}/api/webauthn/signin/begin?owner=${application.organization}${username ? usernameParam : ""}${mfaQuery}`,
     {method: "GET", credentials: "include"},
   )
     .then((res) => res.json())
@@ -44,6 +48,7 @@ export function signInWithWebAuthn(
       } else if (values["type"] === "saml") {
         finishUrl += `&samlRequest=${encodeURIComponent(values["samlRequest"] ?? "")}`;
       }
+      finishUrl += mfaQuery;
 
       return fetch(finishUrl, {
         method: "POST",

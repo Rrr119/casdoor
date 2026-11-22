@@ -32,7 +32,7 @@ import {CropperDivModal, UserImageField} from "@/components/user/CropperDivModal
 import {ThirdPartyLogins} from "@/components/user/OAuthWidget";
 import {AccountItemRow, AccountItemsProvider} from "@/components/user/AccountItemRow";
 import {EnableMfaButton} from "@/components/user/EnableMfaButton";
-import {TotpMfaType} from "@/components/auth/mfa/constants";
+import {TotpMfaType, WebAuthnMfaType} from "@/components/auth/mfa/constants";
 import {MfaItemsTable} from "@/components/auth/mfa/MfaItemsTable";
 import {isAccountItemVisible} from "@/lib/account-items";
 import {PasswordModal} from "@/components/user/PasswordModal";
@@ -1052,7 +1052,7 @@ export default function UserEditPage({self}: {self?: boolean} = {}) {
                   )}
                   {/* an admin can turn on another user's email/SMS factor without
                       their code; TOTP always needs the user's own authenticator */}
-                  {!item.enabled && !isSelf && isAdmin && item.mfaType !== TotpMfaType ? (
+                  {!item.enabled && !isSelf && isAdmin && item.mfaType !== TotpMfaType && item.mfaType !== WebAuthnMfaType ? (
                     <EnableMfaButton user={user} mfaType={item.mfaType} onSuccess={reload} />
                   ) : null}
                   {isSelf ? (

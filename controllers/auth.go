@@ -639,7 +639,7 @@ func checkMfaEnable(c *ApiController, user *object.User, organization *object.Or
 		mfaAllowList := []*object.MfaProps{}
 		mfaRememberInHours := organization.MfaRememberInHours
 		for _, prop := range mfaList {
-			if prop.MfaType == verificationType || !prop.Enabled {
+			if prop.MfaType == verificationType || !prop.Enabled || !object.IsMfaTypeAllowed(organization, user, prop.MfaType) {
 				continue
 			}
 			prop.MfaRememberInHours = mfaRememberInHours
@@ -1260,7 +1260,12 @@ func (c *ApiController) Login() {
 					return
 				}
 
-				if checkMfaEnableForSignin(c, user, organization, verificationType, application.IsMfaSkippedForProvider(provider.Name)) {
+				mfaOrganization, err := object.GetOrganizationByUser(user)
+				if err != nil {
+					c.ResponseError(err.Error())
+					return
+				}
+				if checkMfaEnableForSignin(c, user, mfaOrganization, verificationType, application.IsMfaSkippedForProvider(provider.Name)) {
 					return
 				}
 
@@ -1449,7 +1454,12 @@ func (c *ApiController) Login() {
 					return
 				}
 
-				if checkMfaEnableForSignin(c, user, organization, verificationType, application.IsMfaSkippedForProvider(provider.Name)) {
+				mfaOrganization, err := object.GetOrganizationByUser(user)
+				if err != nil {
+					c.ResponseError(err.Error())
+					return
+				}
+				if checkMfaEnableForSignin(c, user, mfaOrganization, verificationType, application.IsMfaSkippedForProvider(provider.Name)) {
 					return
 				}
 
@@ -1548,9 +1558,9 @@ func (c *ApiController) Login() {
 		}
 
 		var organization *object.Organization
-		organization, err = object.GetOrganization(util.GetId("admin", application.Organization))
+		organization, err = object.GetOrganizationByUser(user)
 		if err != nil {
-			c.ResponseError(c.T(err.Error()))
+			c.ResponseError(err.Error())
 			return
 		}
 

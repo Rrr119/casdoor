@@ -16,10 +16,12 @@ import {
   RadiusMfaType,
   SmsMfaType,
   TotpMfaType,
+  WebAuthnMfaType,
 } from "@/components/auth/mfa/constants";
 import {useAccount} from "@/hooks/use-account";
 import * as ApplicationBackend from "@/backend/ApplicationBackend";
 import * as MfaBackend from "@/backend/MfaBackend";
+import * as UserWebauthnBackend from "@/backend/UserWebauthnBackend";
 import * as Setting from "@/lib/setting";
 
 const MFA_TYPE_LABELS: {type: string; labelKey: string}[] = [
@@ -28,6 +30,7 @@ const MFA_TYPE_LABELS: {type: string; labelKey: string}[] = [
   {type: TotpMfaType, labelKey: "mfa:Use Authenticator App"},
   {type: RadiusMfaType, labelKey: "mfa:Use Radius"},
   {type: PushMfaType, labelKey: "mfa:Use Push Notification"},
+  {type: WebAuthnMfaType, labelKey: "login:WebAuthn"},
 ];
 
 /** The factor the organization marks as "Required", used when the URL carries no "mfaType". */
@@ -65,6 +68,7 @@ export default function MfaSetupPage() {
   const [applicationError, setApplicationError] = React.useState<string | null>(null);
   const [mfaProps, setMfaProps] = React.useState<any>(null);
   const [initiating, setInitiating] = React.useState(false);
+  const [registeringWebAuthn, setRegisteringWebAuthn] = React.useState(false);
   const [verified, setVerified] = React.useState<{dest?: string; countryCode?: string; secret?: string}>({});
 
   React.useEffect(() => {
@@ -112,10 +116,10 @@ export default function MfaSetupPage() {
   }, [account, mfaType]);
 
   React.useEffect(() => {
-    if (current === 1) {
+    if (current === 1 && mfaType !== WebAuthnMfaType) {
       initMfaProps();
     }
-  }, [current, initMfaProps]);
+  }, [current, mfaType, initMfaProps]);
 
   if (!account) {
     return (
@@ -141,6 +145,48 @@ export default function MfaSetupPage() {
     setSearchParams({mfaType: next}, {replace: true});
   };
 
+  const finishMfaSetup = () => {
+    const mfaRedirectUrl = localStorage.getItem("mfaRedirectUrl");
+    if (mfaRedirectUrl) {
+      localStorage.removeItem("mfaRedirectUrl");
+      Setting.goToLink(mfaRedirectUrl);
+    } else {
+      reload().then(() => navigate("/account"));
+    }
+  };
+
+  const registerWebAuthn = () => {
+    setRegisteringWebAuthn(true);
+    UserWebauthnBackend.registerWebauthnCredential(true)
+      .then((res: any) => {
+        if (res?.status === "ok") {
+          Setting.showMessage("success", i18next.t("general:Enabled successfully"));
+          finishMfaSetup();
+        } else {
+          Setting.showMessage("error", `${i18next.t("general:Failed to enable")}: ${res?.msg}`);
+        }
+      })
+      .catch((error: any) => Setting.showMessage("error", String(error)))
+      .finally(() => setRegisteringWebAuthn(false));
+  };
+
+  const renderMfaTypeSwitches = () => {
+    if (cameFromLogin) {
+      return null;
+    }
+    return (
+      <div className="flex flex-wrap justify-center gap-1">
+        {MFA_TYPE_LABELS.filter(
+          (item) => item.type !== mfaType && (allowedMfaTypes.length === 0 || allowedMfaTypes.includes(item.type)),
+        ).map((item) => (
+          <Button key={item.type} variant="link" size="sm" onClick={() => switchMfaType(item.type)}>
+            {i18next.t(item.labelKey)}
+          </Button>
+        ))}
+      </div>
+    );
+  };
+
   const renderStep = () => {
     switch (current) {
     case 0:
@@ -163,6 +209,19 @@ export default function MfaSetupPage() {
           </Alert>
         );
       }
+      if (mfaType === WebAuthnMfaType) {
+        return (
+          <div className="space-y-4">
+            <p className="text-center text-sm text-muted-foreground">
+              {i18next.t("login:WebAuthn")}
+            </p>
+            <Button className="w-full" loading={registeringWebAuthn} onClick={registerWebAuthn}>
+              {i18next.t("login:WebAuthn")}
+            </Button>
+            {renderMfaTypeSwitches()}
+          </div>
+        );
+      }
       if (initiating || mfaProps === null) {
         return <Loading />;
       }
@@ -180,17 +239,7 @@ export default function MfaSetupPage() {
               Setting.showMessage("error", `${i18next.t("general:Failed to verify")}: ${res.msg}`)
             }
           />
-          {!cameFromLogin ? (
-            <div className="flex flex-wrap justify-center gap-1">
-              {MFA_TYPE_LABELS.filter(
-                (item) => item.type !== mfaType && (allowedMfaTypes.length === 0 || allowedMfaTypes.includes(item.type)),
-              ).map((item) => (
-                <Button key={item.type} variant="link" size="sm" onClick={() => switchMfaType(item.type)}>
-                  {i18next.t(item.labelKey)}
-                </Button>
-              ))}
-            </div>
-          ) : null}
+          {renderMfaTypeSwitches()}
         </div>
       );
     case 2:
@@ -204,17 +253,7 @@ export default function MfaSetupPage() {
           countryCode={verified.countryCode}
           onSuccess={() => {
             Setting.showMessage("success", i18next.t("general:Enabled successfully"));
-            // A "RequiredMfa" sign-in parks the URL it wanted to reach here.
-            const mfaRedirectUrl = localStorage.getItem("mfaRedirectUrl");
-            if (mfaRedirectUrl) {
-              // The full page load fetches the account again. Reloading it here would
-              // remount this wizard, which then falls back to SMS as nothing is required anymore.
-              localStorage.removeItem("mfaRedirectUrl");
-              Setting.goToLink(mfaRedirectUrl);
-            } else {
-              // Leave only once the account is fresh, the stale one still asks for this factor.
-              reload().then(() => navigate("/account"));
-            }
+            finishMfaSetup();
           }}
           onFail={(res) => Setting.showMessage("error", `${i18next.t("general:Failed to enable")}: ${res.msg}`)}
         />

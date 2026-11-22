@@ -4,6 +4,7 @@ export const SmsMfaType = "sms";
 export const TotpMfaType = "app";
 export const RadiusMfaType = "radius";
 export const PushMfaType = "push";
+export const WebAuthnMfaType = "webauthn";
 export const RecoveryMfaType = "recovery";
 
 // Answers the login API can return instead of a session.

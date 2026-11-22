@@ -797,6 +797,9 @@ func IsSigninPending(user *User) (bool, error) {
 
 // GetUserMfaItems returns the user's own MFA items, or the organization's when the user has none
 func GetUserMfaItems(org *Organization, user *User) []*MfaItem {
+	if org != nil && user != nil && org.Name != "" && user.Owner != "" && org.Name != user.Owner {
+		return nil
+	}
 	if user != nil && len(user.MfaItems) > 0 {
 		return user.MfaItems
 	}
@@ -826,7 +829,7 @@ func IsNeedPromptMfa(org *Organization, user *User) bool {
 	}
 
 	for _, item := range GetUserMfaItems(org, user) {
-		if item.Rule == "Required" {
+		if item != nil && item.Rule == "Required" {
 			if item.Name == EmailType && !user.MfaEmailEnabled {
 				return true
 			}
@@ -840,6 +843,9 @@ func IsNeedPromptMfa(org *Organization, user *User) bool {
 				return true
 			}
 			if item.Name == PushType && !user.MfaPushEnabled {
+				return true
+			}
+			if item.Name == WebAuthnType && !user.IsWebAuthnMfaEnabled() {
 				return true
 			}
 		}
