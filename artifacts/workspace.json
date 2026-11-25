@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid36828",
+  "B": "/home/dev/feedback/uid36828",
+  "sha": "95cf3a1661eb38a427b241702ea03cf598fa436a",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "casdoor",
+    "repo": "casdoor",
+    "sha": "95cf3a1661eb38a427b241702ea03cf598fa436a"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "casdoor",
+    "cloneUrl": "https://github.com/Rrr119/casdoor.git"
+  },
+  "at": "2026-11-25T03:31:38.962Z"
+}

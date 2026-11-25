@@ -1,0 +1,18 @@
+{
+  "uid": "36828",
+  "harness": "Codex CLI",
+  "snapshotUrl": "https://github.com/Rrr119/casdoor/commit/95cf3a1661eb38a427b241702ea03cf598fa436a",
+  "harnessVersion": "codex-cli 0.167.2",
+  "operatingSystem": "Ubuntu 26.04.1 LTS",
+  "operatingSystemCell": [
+    "MacOS/Linux"
+  ],
+  "outputDirectory": "/home/dev/feedback/uid36828",
+  "wslDistro": "Ubuntu-26.04",
+  "B": {
+    "success": false,
+    "canceled": true,
+    "error": "任务已取消",
+    "side": "B"
+  }
+}

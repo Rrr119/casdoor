@@ -393,6 +393,11 @@ func (a *Ormer) createTable() {
 		panic(err)
 	}
 
+	err = a.Engine.Sync2(new(RelationTuple))
+	if err != nil {
+		panic(err)
+	}
+
 	err = a.Engine.Sync2(new(Model))
 	if err != nil {
 		panic(err)

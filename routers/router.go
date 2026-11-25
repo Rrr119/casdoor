@@ -308,6 +308,15 @@ func InitAPI() {
 	web.Router("/api/delete-permission", &controllers.ApiController{}, "POST:DeletePermission")
 	web.Router("/api/upload-permissions", &controllers.ApiController{}, "POST:UploadPermissions")
 
+	web.Router("/api/migrate-rbac-to-rebac", &controllers.ApiController{}, "POST:MigrateRbacToRebac")
+	web.Router("/api/batch-convert-roles", &controllers.ApiController{}, "POST:BatchConvertRoles")
+	web.Router("/api/get-rebac-tuples", &controllers.ApiController{}, "GET:GetRebacTuples")
+	web.Router("/api/get-permission-matrix", &controllers.ApiController{}, "GET:GetPermissionMatrix")
+	web.Router("/api/verify-rebac-parity", &controllers.ApiController{}, "POST:VerifyRebacParity")
+	web.Router("/api/rbac-to-rebac", &controllers.ApiController{}, "POST:MigrateRbacToRebac")
+	web.Router("/api/batch-convert-rbac-roles", &controllers.ApiController{}, "POST:BatchConvertRoles")
+	web.Router("/api/migrate-all-rbac-to-rebac", &controllers.ApiController{}, "POST:MigrateAllRbacToRebac")
+
 	web.Router("/api/get-models", &controllers.ApiController{}, "GET:GetModels")
 	web.Router("/api/get-model", &controllers.ApiController{}, "GET:GetModel")
 	web.Router("/api/update-model", &controllers.ApiController{}, "POST:UpdateModel")
